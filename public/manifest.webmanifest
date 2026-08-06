@@ -1,0 +1,10 @@
+{
+  "name": "边际音乐 · 财务经营管理",
+  "short_name": "边际音乐",
+  "description": "琴行财务与经营管理系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f5f2",
+  "theme_color": "#2b82ac",
+  "lang": "zh-CN"
+}

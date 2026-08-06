@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+enum AccountType {
+  CASH
+  BANK
+  PAYMENT_PLATFORM
+}
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+enum MovementType {
+  PURCHASE
+  SALE
+  PURCHASE_RETURN
+  SALE_RETURN
+  ADJUSTMENT
+}
+enum AttachmentKind {
+  IMAGE
+  PDF
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String
+  passwordHash String?
+  active      Boolean      @default(true)
+  membership  Membership?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  role      Role     @default(MEMBER)
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  email     String
+  role      Role     @default(MEMBER)
+  tokenHash String   @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model CourseCategory {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  active       Boolean       @default(true)
+  transactions Transaction[]
+}
+
+model Account {
+  id                String        @id @default(cuid())
+  name              String
+  type              AccountType
+  openingBalanceFen BigInt        @default(0)
+  active            Boolean       @default(true)
+  transactions      Transaction[]
+  purchases         PurchaseOrder[]
+  sales             SalesOrder[]
+  createdAt         DateTime      @default(now())
+}
+
+model FinanceCategory {
+  id           String            @id @default(cuid())
+  name         String
+  type         TransactionType
+  active       Boolean           @default(true)
+  transactions Transaction[]
+  @@unique([name, type])
+}
+
+model Transaction {
+  id               String             @id @default(cuid())
+  type             TransactionType
+  amountFen        BigInt
+  occurredAt       DateTime
+  summary          String
+  note             String?
+  accountId        String
+  categoryId       String?
+  courseCategoryId String?
+  createdById      String
+  deletedAt        DateTime?
+  account          Account            @relation(fields: [accountId], references: [id])
+  category         FinanceCategory?   @relation(fields: [categoryId], references: [id])
+  courseCategory   CourseCategory?    @relation(fields: [courseCategoryId], references: [id])
+  attachments      Attachment[]
+  transferOut      TransferLink?      @relation("transferOut")
+  transferIn       TransferLink?      @relation("transferIn")
+  purchase         PurchaseOrder?
+  sale             SalesOrder?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  @@index([occurredAt, type])
+}
+
+model TransferLink {
+  id               String      @id @default(cuid())
+  outTransactionId String      @unique
+  inTransactionId  String      @unique
+  outTransaction   Transaction @relation("transferOut", fields: [outTransactionId], references: [id])
+  inTransaction    Transaction @relation("transferIn", fields: [inTransactionId], references: [id])
+}
+
+model Product {
+  id           String             @id @default(cuid())
+  sku          String             @unique
+  name         String
+  brand        String?
+  category     String
+  specification String?
+  unit         String             @default("件")
+  barcode      String?            @unique
+  salePriceFen BigInt
+  lowStock     Decimal            @default(0) @db.Decimal(14, 3)
+  active       Boolean            @default(true)
+  inventories  InventoryBalance[]
+  movements    InventoryMovement[]
+  purchaseItems PurchaseItem[]
+  salesItems   SalesItem[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model InventoryBalance {
+  id             String   @id @default(cuid())
+  productId      String   @unique
+  quantity       Decimal  @default(0) @db.Decimal(14, 3)
+  averageCostFen BigInt   @default(0)
+  product        Product  @relation(fields: [productId], references: [id])
+  updatedAt      DateTime @updatedAt
+}
+
+model InventoryMovement {
+  id          String       @id @default(cuid())
+  productId   String
+  type        MovementType
+  quantity    Decimal      @db.Decimal(14, 3)
+  unitCostFen BigInt
+  referenceId String
+  note        String?
+  product     Product      @relation(fields: [productId], references: [id])
+  createdAt   DateTime     @default(now())
+  @@index([productId, createdAt])
+}
+
+model PurchaseOrder {
+  id            String         @id @default(cuid())
+  orderNo       String         @unique
+  supplier      String
+  accountId     String
+  status        OrderStatus    @default(DRAFT)
+  goodsAmountFen BigInt
+  feeFen        BigInt         @default(0)
+  paidFen       BigInt
+  occurredAt    DateTime
+  transactionId String?        @unique
+  account       Account        @relation(fields: [accountId], references: [id])
+  transaction   Transaction?   @relation(fields: [transactionId], references: [id])
+  items         PurchaseItem[]
+  attachments   Attachment[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model PurchaseItem {
+  id           String        @id @default(cuid())
+  purchaseId   String
+  productId    String
+  quantity     Decimal       @db.Decimal(14, 3)
+  unitCostFen  BigInt
+  purchase     PurchaseOrder @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product      Product       @relation(fields: [productId], references: [id])
+}
+
+model SalesOrder {
+  id             String       @id @default(cuid())
+  orderNo        String       @unique
+  accountId      String
+  status         OrderStatus  @default(DRAFT)
+  listAmountFen  BigInt
+  discountFen    BigInt       @default(0)
+  receivedFen    BigInt
+  costFen        BigInt       @default(0)
+  occurredAt     DateTime
+  transactionId  String?      @unique
+  account        Account      @relation(fields: [accountId], references: [id])
+  transaction    Transaction? @relation(fields: [transactionId], references: [id])
+  items          SalesItem[]
+  attachments    Attachment[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model SalesItem {
+  id            String     @id @default(cuid())
+  saleId        String
+  productId     String
+  quantity      Decimal    @db.Decimal(14, 3)
+  unitPriceFen  BigInt
+  unitCostFen   BigInt     @default(0)
+  sale          SalesOrder @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product       Product    @relation(fields: [productId], references: [id])
+}
+
+model Attachment {
+  id           String           @id @default(cuid())
+  kind         AttachmentKind
+  fileName     String
+  mimeType     String
+  size         Int
+  storageKey   String           @unique
+  transactionId String?
+  purchaseId   String?
+  saleId       String?
+  transaction  Transaction?     @relation(fields: [transactionId], references: [id])
+  purchase     PurchaseOrder?   @relation(fields: [purchaseId], references: [id])
+  sale         SalesOrder?      @relation(fields: [saleId], references: [id])
+  createdAt    DateTime         @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  createdAt   DateTime @default(now())
+  @@index([entityType, entityId])
+}
+
+model ImportJob {
+  id           String   @id @default(cuid())
+  fileName     String
+  status       String
+  totalRows    Int      @default(0)
+  successRows  Int      @default(0)
+  errorRows    Int      @default(0)
+  errors       Json?
+  createdById  String
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+}

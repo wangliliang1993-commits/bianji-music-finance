@@ -1,7 +1,20 @@
-node_modules/
-.next/
-out/
-dist/
-build/
+node_modules
+.next
+.env
+coverage
+*.log
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+
+# Local validation/build snapshots
 work/
 cache/
+.next/
+dist/
+build/
